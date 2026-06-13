@@ -206,11 +206,28 @@ if drug is not None:
                  [c for c in drug.columns if c != sample_col][:20])
 else:
     log.warning("Drug sensitivity file not found — running expression-only analysis.")
-    # Fallback: test NK score distribution and check gene availability
-    log.info("NK score distribution: mean=%.3f median=%.3f std=%.3f",
-             score_df["NK_cytotoxic_score"].mean(),
-             score_df["NK_cytotoxic_score"].median(),
-             score_df["NK_cytotoxic_score"].std())
+    m = score_df["NK_cytotoxic_score"].mean()
+    med = score_df["NK_cytotoxic_score"].median()
+    sd = score_df["NK_cytotoxic_score"].std()
+    log.info("NK score distribution: mean=%.3f median=%.3f std=%.3f (n=%d)", m, med, sd, len(score_df))
+
+    # Histogram of NK cytotoxic score across BEAT AML cohort
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.hist(score_df["NK_cytotoxic_score"], bins=20, color="#2980b9", edgecolor="white",
+            alpha=0.8)
+    ax.axvline(med, color="#e74c3c", lw=2, ls="--", label=f"Median={med:.2f}")
+    ax.axvline(m,   color="#e67e22", lw=1.5, ls=":",  label=f"Mean={m:.2f}")
+    ax.set_xlabel("NK cytotoxic score (mean log₂ TPM of 12 genes)", fontsize=10)
+    ax.set_ylabel("Number of patients", fontsize=10)
+    ax.set_title(f"NK cytotoxic gene signature in BEAT AML\n"
+                 f"(n={len(score_df)} patients, bulk RNA-seq; Tyner et al. 2018)",
+                 fontsize=10)
+    ax.legend(fontsize=9)
+    plt.tight_layout()
+    fig.savefig(os.path.join(FIG_DIR, "beat_aml_nk_score_distribution.png"),
+                dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    log.info("Saved NK score distribution figure.")
 
 # ── Save results ───────────────────────────────────────────────────────────────
 if results:
