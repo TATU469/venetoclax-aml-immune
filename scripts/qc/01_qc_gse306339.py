@@ -11,7 +11,7 @@ Outputs:
   results/figures/gse306339_qc_metrics.png
 """
 
-import sys, os, logging, warnings, glob
+import sys, os, logging, warnings, glob, re
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -51,9 +51,11 @@ def detect_samples(raw_dir):
         # Pattern: GSMxxxxxx_AML-Axx-{pre|post}_matrix.mtx.gz
         prefix = fname.replace("_matrix.mtx.gz", "")  # e.g. GSM9197630_AML-A15-pre
         parts  = prefix.split("_")
-        # patient = part containing AML-Axx, timepoint = pre/post
-        patient   = next((p for p in parts if p.startswith("AML-A")), "unknown")
-        timepoint = "post" if any("post" in p.lower() for p in parts) else "pre"
+        # Pattern: GSMxxxxxx_AML-A15-pre → patient=AML-A15, timepoint=pre
+        raw_patient = next((p for p in parts if p.startswith("AML-A")), "unknown")
+        timepoint   = "post" if "post" in raw_patient.lower() else "pre"
+        # Strip trailing -pre / -post to get bare patient ID
+        patient   = re.sub(r"-(pre|post)$", "", raw_patient, flags=re.IGNORECASE)
         sample_id = f"{patient}_{timepoint}"
         barcodes = os.path.join(raw_dir, f"{prefix}_barcodes.tsv.gz")
         features = os.path.join(raw_dir, f"{prefix}_features.tsv.gz")
