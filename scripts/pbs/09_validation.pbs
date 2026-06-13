@@ -37,6 +37,7 @@ PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/11_pooled_composition.
 
 echo "[3/3] BEAT AML NK validation..." | tee -a "${LOG}"
 PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/10_beat_aml.py" \
-    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+    "${PROJECT}" 2>&1 | tee -a "${LOG}" \
+    || echo "[WARN] BEAT AML step failed (data may not be downloaded yet)" | tee -a "${LOG}"
 
 echo "End: $(date)" | tee -a "${LOG}"

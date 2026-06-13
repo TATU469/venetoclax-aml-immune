@@ -50,18 +50,22 @@ def detect_samples(raw_dir):
     samples = {}
     for mf in mtx_files:
         fname  = os.path.basename(mf)
-        prefix = fname.replace("_matrix.mtx.gz", "")
-        parts  = prefix.split("_")
-        # Expected: GSMxxxxxx_PatientX_{pre|post}_...
-        patient   = next((p for p in parts if re.match(r"[Pp]atient\d+|AML|P\d+", p)),
-                         parts[1] if len(parts) > 1 else "unknown")
-        timepoint = "post" if any("post" in p.lower() for p in parts) else "pre"
-        # Outcome from GSM metadata — map NR/PR/CR
-        outcome = next((OUTCOME_MAP[p] for p in parts if p in OUTCOME_MAP), "unknown")
-        patient = re.sub(r"-(pre|post)$", "", patient, flags=re.IGNORECASE)
-        sample_id = f"{patient}_{timepoint}"
+        # Pattern: GSMxxxxxx_NR-pretreatment-matrix.mtx.gz
+        #          GSMxxxxxx_CR1-postreatment-matrix.mtx.gz
+        prefix = fname.replace("-matrix.mtx.gz", "").replace("_matrix.mtx.gz", "")
+        # Second part after GSM: e.g. "NR-pretreatment" or "CR1-postreatment"
+        core  = prefix.split("_", 1)[1] if "_" in prefix else prefix
+        parts = core.split("-")          # ["NR", "pretreatment"] or ["CR1", "postreatment"]
+        outcome_raw = parts[0].upper()   # NR / PR / CR1 / CR2
+        tp_raw      = parts[1] if len(parts) > 1 else "pre"
+        timepoint   = "post" if "post" in tp_raw.lower() else "pre"
+        patient     = outcome_raw        # patient identifier = outcome code
+        outcome     = OUTCOME_MAP.get(outcome_raw, outcome_raw)
+        sample_id   = f"{patient}_{timepoint}"
+        # Prefix for sc.read_10x_mtx: everything before "-matrix.mtx.gz"
+        mtx_prefix = fname.replace("-matrix.mtx.gz", "").replace("_matrix.mtx.gz", "")
         samples[sample_id] = {
-            "prefix": prefix, "dir": raw_dir, "matrix": mf,
+            "prefix": mtx_prefix, "dir": raw_dir, "matrix": mf,
             "patient": patient, "timepoint": timepoint, "outcome": outcome,
         }
     return samples
