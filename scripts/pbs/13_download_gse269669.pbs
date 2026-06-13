@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -N venet_dl_269669
+#PBS -l select=1:ncpus=2:mem=8gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/download_gse269669.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+# Downloads GSE269669: 11 TP53-mut AML patients, ven+AZA+magrolimab, paired, Seurat RDS
+
+set -uo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+RAW=${PROJECT}/data/raw/GSE269669
+mkdir -p "${RAW}" "${PROJECT}/logs"
+
+echo "Start: $(date)"
+
+BASE="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE269nnn/GSE269669/suppl"
+
+# Download RAW tar (all per-sample RDS files)
+TAR="${RAW}/GSE269669_RAW.tar"
+if [ ! -s "${TAR}" ]; then
+    echo "[INFO] Downloading GSE269669_RAW.tar..."
+    wget -q --show-progress -O "${TAR}" "${BASE}/GSE269669_RAW.tar" || \
+        { echo "[WARN] RAW tar not found, trying individual file listing..."; rm -f "${TAR}"; }
+fi
+
+# If RAW.tar exists, extract it
+if [ -s "${TAR}" ]; then
+    echo "[INFO] Extracting..."
+    tar -xf "${TAR}" -C "${RAW}/"
+fi
+
+# List what's available on GEO in case tar fails
+echo "[INFO] GEO supplement file listing:"
+wget -q -O - "${BASE}/" 2>/dev/null | grep -oP 'GSE269669[^"]+' | sort | head -30 || true
+
+echo "[INFO] Downloaded files:"
+ls -lh "${RAW}/"
+
+echo "End: $(date)"
