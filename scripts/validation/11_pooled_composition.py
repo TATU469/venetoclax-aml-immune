@@ -190,6 +190,8 @@ plt.close(fig)
 obs_311 = obs_all[obs_all["cohort"] == "GSE311458"].copy()
 if obs_311["outcome"].nunique() > 1:
     log.info("Response stratification in GSE311458...")
+    for col in ["patient_uid", "timepoint", "cell_type", "outcome"]:
+        obs_311[col] = obs_311[col].astype(str)
     counts_311 = (obs_311.groupby(["patient_uid", "timepoint", "cell_type", "outcome"])
                   .size().reset_index(name="n"))
     totals_311  = counts_311.groupby(["patient_uid", "timepoint"])["n"].sum() \
@@ -199,8 +201,12 @@ if obs_311["outcome"].nunique() > 1:
 
     # NK cell fraction change by response
     nk_311 = counts_311[counts_311["cell_type"] == "NK_cell"].copy()
+    nk_311["patient_uid"] = nk_311["patient_uid"].astype(str)
+    nk_311["outcome"]     = nk_311["outcome"].astype(str)
     nk_pivot = nk_311.pivot_table(index=["patient_uid", "outcome"],
-                                    columns="timepoint", values="fraction").reset_index()
+                                    columns="timepoint", values="fraction",
+                                    fill_value=0).reset_index()
+    nk_pivot.columns.name = None
     nk_pivot = nk_pivot.dropna(subset=["pre", "post"])
     nk_pivot["delta"] = nk_pivot["post"] - nk_pivot["pre"]
     nk_pivot["fc"]    = (nk_pivot["post"] + 1e-6) / (nk_pivot["pre"] + 1e-6)

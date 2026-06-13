@@ -66,7 +66,7 @@ def load_drug_sensitivity(raw_dir):
     for fname in ["beataml_drug_sensitivity.txt", "beataml_probit_curve_fits_v4_dbgap.txt",
                   "drug_sensitivity.tsv", "drug_sensitivity.txt"]:
         fp = os.path.join(raw_dir, fname)
-        if os.path.exists(fp):
+        if os.path.exists(fp) and os.path.getsize(fp) > 0:
             log.info("Loading drug sensitivity from %s", fname)
             return pd.read_csv(fp, sep="\t")
     # Try GEO series matrix for clinical/drug info
