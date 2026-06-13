@@ -1,0 +1,82 @@
+#!/bin/bash
+#PBS -N venet_dl_val
+#PBS -l select=1:ncpus=2:mem=16gb
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/download_validation.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+# Downloads:
+#   GSE311458 — 4 paired AML patients, ven+AZA+chidamide, MTX format (Tier 1)
+#   GSE277678 — 2 CR→refractory patients, H5AD format  (Tier 1 resistance)
+#   BEAT AML  — bulk RNA-seq + venetoclax ex vivo AUC (GEO GSE114922)
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+RAW=${PROJECT}/data/raw
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/download_validation_${TIMESTAMP}.log
+
+mkdir -p "${RAW}/GSE311458" "${RAW}/GSE277678" "${RAW}/BEAT_AML" "${PROJECT}/logs"
+
+echo "Start: $(date)" | tee "${LOG}"
+
+# ── GSE311458: 4 paired ven+AZA+chidamide patients (MTX, ~small) ─────────────
+URL_311458="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE311nnn/GSE311458/suppl/GSE311458_RAW.tar"
+TAR_311458="${RAW}/GSE311458/GSE311458_RAW.tar"
+if [ ! -f "${TAR_311458}" ]; then
+    echo "[INFO] Downloading GSE311458..." | tee -a "${LOG}"
+    wget -q --show-progress -O "${TAR_311458}" "${URL_311458}" 2>&1 | tee -a "${LOG}"
+fi
+echo "[INFO] Extracting GSE311458..." | tee -a "${LOG}"
+tar -xf "${TAR_311458}" -C "${RAW}/GSE311458/"
+echo "[INFO] GSE311458 files:" | tee -a "${LOG}"
+ls "${RAW}/GSE311458/" | head -20 | tee -a "${LOG}"
+
+# ── GSE277678: 2 CR→refractory patients (H5AD) ───────────────────────────────
+URL_277678="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE277nnn/GSE277678/suppl/GSE277678_RAW.tar"
+TAR_277678="${RAW}/GSE277678/GSE277678_RAW.tar"
+if [ ! -f "${TAR_277678}" ]; then
+    echo "[INFO] Downloading GSE277678..." | tee -a "${LOG}"
+    wget -q --show-progress -O "${TAR_277678}" "${URL_277678}" 2>&1 | tee -a "${LOG}"
+fi
+echo "[INFO] Extracting GSE277678..." | tee -a "${LOG}"
+tar -xf "${TAR_277678}" -C "${RAW}/GSE277678/" 2>/dev/null || \
+    ls "${RAW}/GSE277678/" | tee -a "${LOG}"
+echo "[INFO] GSE277678 files:" | tee -a "${LOG}"
+ls -lh "${RAW}/GSE277678/" | tee -a "${LOG}"
+
+# ── BEAT AML: bulk RNA-seq counts + drug sensitivity ─────────────────────────
+# Expression: GSE114922 (Tyner et al. 2018, Nature)
+# Drug sensitivity: paper supplementary (Supplementary Table 9)
+BEAT_GEO_URL="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE114nnn/GSE114922/suppl/GSE114922_RAW.tar"
+BEAT_TAR="${RAW}/BEAT_AML/GSE114922_RAW.tar"
+if [ ! -f "${BEAT_TAR}" ]; then
+    echo "[INFO] Downloading BEAT AML expression (GSE114922)..." | tee -a "${LOG}"
+    wget -q --show-progress -O "${BEAT_TAR}" "${BEAT_GEO_URL}" 2>&1 | tee -a "${LOG}" || \
+        echo "[WARN] GSE114922 direct download failed — trying alternative..." | tee -a "${LOG}"
+fi
+
+# Alternative: processed matrix directly from GEO
+if [ ! -s "${BEAT_TAR}" ]; then
+    BEAT_ALT="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE114nnn/GSE114922/suppl/GSE114922_matrix.txt.gz"
+    wget -q -O "${RAW}/BEAT_AML/GSE114922_matrix.txt.gz" "${BEAT_ALT}" 2>&1 | tee -a "${LOG}" || \
+        echo "[WARN] Alternative download also failed." | tee -a "${LOG}"
+fi
+
+# Drug sensitivity — Supplementary Data from Tyner et al. 2018
+# Available as processed CSV from beatAML GitHub/Synapse
+DRUG_URL="https://raw.githubusercontent.com/pnnl-predictive-phenomics/BeatAML/main/data/beataml_probit_curve_fits_v4_dbgap.txt"
+DRUG_FILE="${RAW}/BEAT_AML/beataml_drug_sensitivity.txt"
+if [ ! -f "${DRUG_FILE}" ]; then
+    echo "[INFO] Downloading BEAT AML drug sensitivity..." | tee -a "${LOG}"
+    wget -q -O "${DRUG_FILE}" "${DRUG_URL}" 2>&1 | tee -a "${LOG}" || \
+        echo "[WARN] Drug sensitivity download failed — will use GEO series matrix." | tee -a "${LOG}"
+fi
+
+echo "[INFO] BEAT AML files:" | tee -a "${LOG}"
+ls -lh "${RAW}/BEAT_AML/" | tee -a "${LOG}"
+
+echo "Download complete: $(date)" | tee -a "${LOG}"

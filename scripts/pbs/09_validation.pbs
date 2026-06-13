@@ -1,0 +1,42 @@
+#!/bin/bash
+#PBS -N venet_validation
+#PBS -l select=1:ncpus=8:mem=64gb
+#PBS -l walltime=06:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/validation.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+# Runs:
+#  1. QC + annotation of GSE311458 (expansion cohort, 4 patients)
+#  2. Pooled composition analysis (GSE306339 + GSE311458, n=7)
+#  3. BEAT AML NK score vs venetoclax AUC validation
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/validation_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/results/figures/validation" \
+         "${PROJECT}/results/tables/validation"
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+echo "Start: $(date)" | tee "${LOG}"
+
+echo "[1/3] QC + annotate GSE311458..." | tee -a "${LOG}"
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/09_qc_gse311458.py" \
+    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+
+echo "[2/3] Pooled composition (GSE306339 + GSE311458)..." | tee -a "${LOG}"
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/11_pooled_composition.py" \
+    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+
+echo "[3/3] BEAT AML NK validation..." | tee -a "${LOG}"
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/10_beat_aml.py" \
+    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+
+echo "End: $(date)" | tee -a "${LOG}"
