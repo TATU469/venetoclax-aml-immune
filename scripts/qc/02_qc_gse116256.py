@@ -63,7 +63,8 @@ def load_txt_gz(path):
             parts = line.strip().split("\t")
             gene_names.append(parts[0])
             rows.append([float(x) for x in parts[1:]])
-    cell_ids = header  # first row = cell barcodes
+    # First element of header is the gene-column label (empty or "Gene") — skip it
+    cell_ids = header[1:] if header[0] in ("", "Gene", "gene", "GENE") else header
     mat = sp.csr_matrix(np.array(rows, dtype=np.float32).T)
     adata = sc.AnnData(X=mat,
                        obs=pd.DataFrame(index=cell_ids),
