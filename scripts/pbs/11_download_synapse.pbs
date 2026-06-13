@@ -32,16 +32,10 @@ python -c "import synapseclient" 2>/dev/null || \
 
 echo "Synapseclient version: $(python -c 'import synapseclient; print(synapseclient.__version__)')"
 
-# TOKEN must be set in environment when submitting:
-#   SYNAPSE_TOKEN=xxx qsub 11_download_synapse.pbs
-if [ -z "${SYNAPSE_TOKEN:-}" ]; then
-    echo "ERROR: SYNAPSE_TOKEN not set."
-    echo "Submit with: SYNAPSE_TOKEN=your_token qsub 11_download_synapse.pbs"
-    exit 1
-fi
-
+# Token is read from ~/.synapseConfig (set up once on the HPC).
+# Optionally override by passing SYNAPSE_TOKEN env var via: qsub -v SYNAPSE_TOKEN=...
 PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/download_synapse_beat_aml.py" \
-    "${PROJECT}" "${SYNAPSE_TOKEN}"
+    "${PROJECT}" "${SYNAPSE_TOKEN:-}"
 
 echo "Download complete. Re-running BEAT AML validation..."
 PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/10_beat_aml.py" \

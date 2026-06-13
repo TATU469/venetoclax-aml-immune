@@ -21,11 +21,6 @@ TOKEN   = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("SYNAPSE_TOKEN", 
 OUT_DIR = os.path.join(PROJECT, "data/raw/BEAT_AML")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-if not TOKEN:
-    print("ERROR: Synapse token required. Pass as argument or set SYNAPSE_TOKEN env var.")
-    print("  Get token: https://www.synapse.org/#!PersonalAccessTokens:")
-    sys.exit(1)
-
 try:
     import synapseclient
 except ImportError:
@@ -35,7 +30,10 @@ except ImportError:
     import synapseclient
 
 syn = synapseclient.Synapse()
-syn.login(authToken=TOKEN, silent=True)
+if TOKEN:
+    syn.login(authToken=TOKEN, silent=True)
+else:
+    syn.login(silent=True)  # reads ~/.synapseConfig
 print("Logged in to Synapse.")
 
 # BEAT AML wave 1-4 probit curve fits (drug sensitivity, public tier)
