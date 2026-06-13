@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -N venet_synapse
+#PBS -l select=1:ncpus=1:mem=4gb
+#PBS -l walltime=01:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/synapse_download.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+# Downloads BEAT AML drug sensitivity from Synapse (syn26427390).
+# Requires a free Synapse account + Personal Access Token.
+#
+# Get token at: https://www.synapse.org/#!PersonalAccessTokens:
+#   Account Settings → Personal Access Tokens → Create New Token
+#   (enable: view + download scopes)
+#
+# Then submit with token:
+#   SYNAPSE_TOKEN=your_token_here qsub 11_download_synapse.pbs
+# Or set it in this file below (don't commit the token to git).
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+# Install synapseclient if not present
+python -c "import synapseclient" 2>/dev/null || \
+    pip install -q "synapseclient>=4.0"
+
+echo "Synapseclient version: $(python -c 'import synapseclient; print(synapseclient.__version__)')"
+
+# TOKEN must be set in environment when submitting:
+#   SYNAPSE_TOKEN=xxx qsub 11_download_synapse.pbs
+if [ -z "${SYNAPSE_TOKEN:-}" ]; then
+    echo "ERROR: SYNAPSE_TOKEN not set."
+    echo "Submit with: SYNAPSE_TOKEN=your_token qsub 11_download_synapse.pbs"
+    exit 1
+fi
+
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/download_synapse_beat_aml.py" \
+    "${PROJECT}" "${SYNAPSE_TOKEN}"
+
+echo "Download complete. Re-running BEAT AML validation..."
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/10_beat_aml.py" \
+    "${PROJECT}"
+
+echo "Done: $(date)"

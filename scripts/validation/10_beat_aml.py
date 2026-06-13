@@ -76,7 +76,8 @@ def load_beat_expr(raw_dir):
 # ── Load drug sensitivity ──────────────────────────────────────────────────────
 def load_drug_sensitivity(raw_dir):
     """Load BEAT AML drug sensitivity (venetoclax AUC)."""
-    for fname in ["beataml_drug_sensitivity.txt", "beataml_probit_curve_fits_v4_dbgap.txt",
+    for fname in ["beataml_wv1to4_probit_curve_fits.txt", "beataml_drug_sensitivity.txt",
+                  "beataml_probit_curve_fits_v4_dbgap.txt",
                   "drug_sensitivity.tsv", "drug_sensitivity.txt"]:
         fp = os.path.join(raw_dir, fname)
         if os.path.exists(fp) and os.path.getsize(fp) > 0:
