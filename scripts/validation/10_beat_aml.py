@@ -43,7 +43,8 @@ NK_INHIBITORY_GENES = ["TIGIT", "LAG3", "PDCD1", "HAVCR2", "CTLA4"]
 def load_beat_expr(raw_dir):
     """Try multiple known formats of BEAT AML expression data."""
     # Option 1: processed matrix text file
-    for fname in ["GSE114922_matrix.txt.gz", "GSE114922_matrix.txt",
+    for fname in ["GSE114922_TPM_table.txt.gz", "GSE114922_CPM_table.txt.gz",
+                  "GSE114922_Count_table.txt.gz", "GSE114922_matrix.txt.gz",
                   "beat_aml_expr.txt.gz", "beat_aml_expr.csv"]:
         fp = os.path.join(raw_dir, fname)
         if os.path.exists(fp):

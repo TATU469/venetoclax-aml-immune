@@ -82,7 +82,7 @@ for sid, info in samples.items():
     log.info("--- Loading %s ---", sid)
     try:
         adata = sc.read_10x_mtx(info["dir"], var_names="gene_symbols",
-                                  make_unique=True, prefix=info["prefix"] + "_")
+                                  make_unique=True, prefix=info["prefix"] + "-")
     except Exception as e:
         log.warning("  Failed: %s", e)
         continue

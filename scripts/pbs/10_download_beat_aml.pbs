@@ -26,10 +26,9 @@ echo "Start: $(date)" | tee "${LOG}"
 BASE="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE114nnn/GSE114922/suppl"
 
 for FNAME in \
-    "GSE114922_matrix.txt.gz" \
-    "GSE114922_BEAT_AML_rnaseq.fpkm.txt.gz" \
-    "GSE114922_BEATS_fpkm.txt.gz" \
-    "GSE114922_norm_counts.txt.gz"; do
+    "GSE114922_TPM_table.txt.gz" \
+    "GSE114922_CPM_table.txt.gz" \
+    "GSE114922_Count_table.txt.gz"; do
     DEST="${RAW}/${FNAME}"
     if [ ! -s "${DEST}" ]; then
         echo "[INFO] Trying ${FNAME}..." | tee -a "${LOG}"
@@ -51,7 +50,8 @@ wget -q -O - "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE114nnn/GSE114922/suppl/
 # ── Drug sensitivity: beatAML GitHub ─────────────────────────────────────────
 DRUG_FILE="${RAW}/beataml_drug_sensitivity.txt"
 if [ ! -s "${DRUG_FILE}" ]; then
-    DRUG_URL="https://raw.githubusercontent.com/pnnl-predictive-phenomics/BeatAML/main/data/beataml_probit_curve_fits_v4_dbgap.txt"
+    # Public Synapse mirror of BEAT AML probit curve fits (wave 1-4, public tier)
+DRUG_URL="https://synapse-oidc.prod.sagebase.org/repo/v1/entity/syn26427390/file"
     echo "[INFO] Downloading drug sensitivity..." | tee -a "${LOG}"
     wget -q --timeout=60 -O "${DRUG_FILE}" "${DRUG_URL}" 2>&1 | tee -a "${LOG}" || \
         echo "[WARN] Drug sensitivity download failed" | tee -a "${LOG}"
