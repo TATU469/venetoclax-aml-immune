@@ -39,6 +39,19 @@ NK_CYTOTOXIC_GENES = ["NKG7", "GNLY", "GZMB", "PRF1", "GZMA", "GZMH",
                        "IFNG", "NCR1", "KLRD1", "KLRK1", "XCL1", "XCL2"]
 NK_INHIBITORY_GENES = ["TIGIT", "LAG3", "PDCD1", "HAVCR2", "CTLA4"]
 
+# Ensembl ID → symbol for all signature genes (GRCh38)
+ENSG_MAP = {
+    "ENSG00000105374": "NKG7",  "ENSG00000115523": "GNLY",
+    "ENSG00000100453": "GZMB",  "ENSG00000180644": "PRF1",
+    "ENSG00000145649": "GZMA",  "ENSG00000113088": "GZMH",
+    "ENSG00000111537": "IFNG",  "ENSG00000189430": "NCR1",
+    "ENSG00000134539": "KLRD1", "ENSG00000213809": "KLRK1",
+    "ENSG00000143185": "XCL1",  "ENSG00000143184": "XCL2",
+    "ENSG00000181732": "TIGIT", "ENSG00000089692": "LAG3",
+    "ENSG00000188389": "PDCD1", "ENSG00000135077": "HAVCR2",
+    "ENSG00000163599": "CTLA4",
+}
+
 # ── Load BEAT AML expression matrix ──────────────────────────────────────────
 def load_beat_expr(raw_dir):
     """Try multiple known formats of BEAT AML expression data."""
@@ -73,6 +86,9 @@ def load_drug_sensitivity(raw_dir):
     return None
 
 expr = load_beat_expr(RAW_DIR)
+if expr is not None and expr.index[0].startswith("ENSG"):
+    log.info("Remapping Ensembl IDs → gene symbols for signature genes")
+    expr.index = expr.index.map(lambda x: ENSG_MAP.get(x, x))
 drug = load_drug_sensitivity(RAW_DIR)
 
 if expr is None:
