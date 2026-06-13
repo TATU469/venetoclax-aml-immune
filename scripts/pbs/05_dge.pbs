@@ -1,0 +1,30 @@
+#!/bin/bash
+#PBS -N venet_dge
+#PBS -l select=1:ncpus=8:mem=64gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/dge.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/dge_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/results/tables/dge" "${PROJECT}/results/figures/dge"
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+echo "Start: $(date)" | tee "${LOG}"
+
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/dge/05_dge.py" "${PROJECT}" \
+    2>&1 | tee -a "${LOG}"
+
+echo "DGE files generated:" | tee -a "${LOG}"
+ls -lh "${PROJECT}/results/tables/dge/"*.tsv 2>/dev/null | tee -a "${LOG}" || true
+
+echo "End: $(date)" | tee -a "${LOG}"

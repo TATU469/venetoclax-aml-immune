@@ -1,0 +1,9 @@
+data/raw/
+data/processed/
+results/
+logs/
+envs/
+*.h5ad
+*.pyc
+__pycache__/
+.DS_Store

@@ -1,0 +1,45 @@
+#!/bin/bash
+#PBS -N venet_qc
+#PBS -l select=1:ncpus=8:mem=64gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/qc.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/qc_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/logs" "${PROJECT}/data/processed" \
+         "${PROJECT}/results/figures" "${PROJECT}/results/tables"
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+echo "Start: $(date)" | tee "${LOG}"
+echo "Python: $(python3 --version)" | tee -a "${LOG}"
+
+for OUT in "${PROJECT}/data/processed/gse306339_qc.h5ad" \
+           "${PROJECT}/data/processed/gse116256_qc.h5ad"; do
+    SCRIPT="${PROJECT}/scripts/qc/$(basename ${OUT} _qc.h5ad | sed 's/gse/0/; s/^/0/').py"
+done
+
+echo "[INFO] Running QC: GSE306339..." | tee -a "${LOG}"
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/qc/01_qc_gse306339.py" "${PROJECT}" \
+    2>&1 | tee -a "${LOG}"
+
+echo "[INFO] Running QC: GSE116256..." | tee -a "${LOG}"
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/qc/02_qc_gse116256.py" "${PROJECT}" \
+    2>&1 | tee -a "${LOG}"
+
+for f in "${PROJECT}/data/processed/gse306339_qc.h5ad" \
+         "${PROJECT}/data/processed/gse116256_qc.h5ad"; do
+    [ -f "${f}" ] && echo "[OK] ${f##*/}" | tee -a "${LOG}" \
+                  || echo "[WARN] Missing: ${f##*/}" | tee -a "${LOG}"
+done
+
+echo "End: $(date)" | tee -a "${LOG}"

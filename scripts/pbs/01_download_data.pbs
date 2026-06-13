@@ -1,0 +1,64 @@
+#!/bin/bash
+#PBS -N venet_download
+#PBS -l select=1:ncpus=2:mem=8gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/download.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+RAW=${PROJECT}/data/raw
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/download_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/logs" "${RAW}/GSE306339" "${RAW}/GSE116256"
+
+echo "============================================================" | tee "${LOG}"
+echo "  Start : $(date)" | tee -a "${LOG}"
+echo "============================================================" | tee -a "${LOG}"
+
+# ── GSE306339: TP53-mut AML, venetoclax pre/post (449 MB) ────────────────────
+GSE306339_URL="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE306nnn/GSE306339/suppl/GSE306339_RAW.tar"
+GSE306339_TAR="${RAW}/GSE306339/GSE306339_RAW.tar"
+
+if [ ! -f "${GSE306339_TAR}" ]; then
+    echo "[INFO] Downloading GSE306339..." | tee -a "${LOG}"
+    wget -q --show-progress -O "${GSE306339_TAR}" "${GSE306339_URL}" 2>&1 | tee -a "${LOG}"
+else
+    echo "[INFO] GSE306339_RAW.tar already present." | tee -a "${LOG}"
+fi
+
+echo "[INFO] Extracting GSE306339..." | tee -a "${LOG}"
+tar -xf "${GSE306339_TAR}" -C "${RAW}/GSE306339/"
+echo "[INFO] GSE306339 files:" | tee -a "${LOG}"
+ls -lh "${RAW}/GSE306339/"*.gz 2>/dev/null | tee -a "${LOG}" || true
+
+# ── GSE116256: van Galen 2019 AML hierarchy (70 MB) ──────────────────────────
+GSE116256_URL="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE116nnn/GSE116256/suppl/GSE116256_RAW.tar"
+GSE116256_TAR="${RAW}/GSE116256/GSE116256_RAW.tar"
+
+if [ ! -f "${GSE116256_TAR}" ]; then
+    echo "[INFO] Downloading GSE116256..." | tee -a "${LOG}"
+    wget -q --show-progress -O "${GSE116256_TAR}" "${GSE116256_URL}" 2>&1 | tee -a "${LOG}"
+else
+    echo "[INFO] GSE116256_RAW.tar already present." | tee -a "${LOG}"
+fi
+
+echo "[INFO] Extracting GSE116256..." | tee -a "${LOG}"
+tar -xf "${GSE116256_TAR}" -C "${RAW}/GSE116256/"
+echo "[INFO] GSE116256 files (first 20):" | tee -a "${LOG}"
+ls "${RAW}/GSE116256/" | head -20 | tee -a "${LOG}"
+
+# ── Download GSE306339 series matrix for metadata ─────────────────────────────
+META_URL="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE306nnn/GSE306339/soft/GSE306339_family.soft.gz"
+META_FILE="${RAW}/GSE306339/GSE306339_family.soft.gz"
+if [ ! -f "${META_FILE}" ]; then
+    wget -q -O "${META_FILE}" "${META_URL}" 2>&1 | tee -a "${LOG}" || true
+fi
+
+echo "============================================================" | tee -a "${LOG}"
+echo "  Download COMPLETE : $(date)" | tee -a "${LOG}"
+echo "============================================================" | tee -a "${LOG}"
