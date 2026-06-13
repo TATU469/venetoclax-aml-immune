@@ -28,16 +28,18 @@ install_if_missing <- function(pkg) {
   }
 }
 
-# Matrix ships with R but may be absent in Spack builds — install from CRAN
+# Matrix ships with R but absent from Spack build — install from CRAN
 install_if_missing("Matrix")
-install_if_missing("Seurat")
+# SeuratObject only (no curl/shiny/plotly deps unlike full Seurat)
+install_if_missing("SeuratObject")
 
 suppressPackageStartupMessages({
   library(Matrix)
   library(methods)
-  library(Seurat)
+  if (requireNamespace("SeuratObject", quietly = TRUE))
+    library(SeuratObject)
 })
-message("Seurat version: ", packageVersion("Seurat"))
+message("Matrix version: ", packageVersion("Matrix"))
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 args    <- commandArgs(trailingOnly = TRUE)
@@ -68,12 +70,21 @@ export_sample <- function(seu, sample_id, out_base) {
   # Prefer RNA assay; fall back to first available
   assay <- if ("RNA" %in% names(seu@assays)) "RNA" else names(seu@assays)[1]
   message("  Using assay: ", assay)
+  assay_obj <- seu@assays[[assay]]
 
-  # Raw counts — handle Seurat v4 and v5 slot differences
-  counts <- tryCatch(
-    GetAssayData(seu, assay = assay, layer  = "counts"),   # Seurat v5
-    error = function(e)
-    GetAssayData(seu, assay = assay, slot   = "counts"))   # Seurat v4
+  # Raw counts — direct slot access handles both Seurat v4 and v5
+  counts <- tryCatch({
+    # Seurat v5: counts in @layers list
+    lyr <- assay_obj@layers[["counts"]]
+    if (is.null(lyr)) stop("no layers slot")
+    lyr
+  }, error = function(e) tryCatch({
+    # Seurat v4: counts in @counts slot
+    assay_obj@counts
+  }, error = function(e2) {
+    # Last resort: data slot (normalised)
+    assay_obj@data
+  }))
 
   if (ncol(counts) == 0 || nrow(counts) == 0) {
     message("  WARNING: empty counts matrix for ", sample_id, " — skipping")
