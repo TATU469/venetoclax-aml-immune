@@ -51,19 +51,29 @@ MARKERS = {
     "pDC":            ["LILRA4", "CLEC4C", "IRF7"],
 }
 
-def parse_timepoint(sample_dir):
-    """Infer timepoint from directory name or metadata."""
-    name = os.path.basename(sample_dir).lower()
-    if any(k in name for k in ["post", "after", "treat", "cycle", "c2", "c3"]):
-        return "post"
-    return "pre"
+TIMEPOINT_SUFFIX = {"a": "pre", "b": "post", "c": "post_c2"}
 
 def parse_patient(sample_dir):
-    """Extract patient ID from directory name."""
-    name = os.path.basename(sample_dir)
-    # Strip trailing _pre/_post if present
-    name = re.sub(r"_(pre|post)$", "", name, flags=re.IGNORECASE)
+    """Extract patient ID — strips trailing letter suffix (A/B/C)."""
+    name = os.path.basename(sample_dir.rstrip("/"))
+    # PTxxA / PTxxB / PTxxC → PT33
+    m = re.match(r"^(PT\d+)[A-Ca-c]$", name)
+    if m:
+        return m.group(1)
     return name
+
+def parse_timepoint(sample_dir):
+    """Map letter suffix to timepoint: A=pre, B=post, C=post_c2."""
+    name = os.path.basename(sample_dir.rstrip("/"))
+    m = re.match(r"^PT\d+([A-Ca-c])$", name)
+    if m:
+        return TIMEPOINT_SUFFIX.get(m.group(1).lower(), "pre")
+    return "pre"
+
+def is_tme_sample(sample_dir):
+    """Keep only TME-file directories (PTxxA/B/C), skip AML-file duplicates (PTxx_Pre/Post)."""
+    name = os.path.basename(sample_dir.rstrip("/"))
+    return bool(re.match(r"^PT\d+[A-Ca-c]$", name))
 
 def load_metadata_from_tsv(sample_dir):
     """Load per-cell metadata saved by R script, if available."""
@@ -91,13 +101,20 @@ if not sample_dirs:
     log.error("Run 12_convert_gse269669.R first.")
     sys.exit(1)
 
-log.info("Found %d converted sample directories", len(sample_dirs))
+# Keep only TME-file samples (PTxxA/B/C); drop AML-file duplicates (PTxx_Pre/Post)
+sample_dirs = [d for d in sample_dirs if is_tme_sample(d)]
+log.info("After filtering to TME samples: %d directories", len(sample_dirs))
+for d in sample_dirs:
+    log.info("  %s → patient=%s timepoint=%s",
+             os.path.basename(d), parse_patient(d), parse_timepoint(d))
 
 adatas, qc_records = [], []
 
 for sample_dir in sample_dirs:
     sid = os.path.basename(sample_dir.rstrip("/"))
-    log.info("--- Loading %s ---", sid)
+    patient_id = parse_patient(sample_dir)
+    timepoint  = parse_timepoint(sample_dir)
+    log.info("--- Loading %s (patient=%s, timepoint=%s) ---", sid, patient_id, timepoint)
 
     try:
         adata = sc.read_10x_mtx(sample_dir, var_names="gene_symbols",
@@ -109,26 +126,14 @@ for sample_dir in sample_dirs:
     # Load per-cell metadata from R export
     meta = load_metadata_from_tsv(sample_dir)
 
-    # Determine patient_id and timepoint
-    if meta is not None and "patient_id" in meta.columns:
-        patient_id = meta["patient_id"].iloc[0]
-    elif meta is not None and "orig.ident" in meta.columns:
-        patient_id = meta["orig.ident"].iloc[0]
-    else:
-        patient_id = parse_patient(sample_dir)
-
-    if meta is not None and "timepoint" in meta.columns:
-        timepoint = meta["timepoint"].iloc[0]
-    else:
-        timepoint = parse_timepoint(sample_dir)
-
-    # Pull any existing cell-type annotation from R metadata
+    # Prefer Azimuth L2 annotation, fall back to marker scoring
     celltype_col = None
     if meta is not None:
-        for col in ["cell_type", "celltype", "CellType", "seurat_clusters",
-                    "predicted.id", "annotation"]:
+        for col in ["predicted.celltype.l2", "predicted.celltype.l1",
+                    "cell_type", "celltype", "annotation"]:
             if col in meta.columns:
                 celltype_col = col
+                log.info("  Using cell type annotation: %s", col)
                 break
 
     adata.obs["sample_id"]  = sid
