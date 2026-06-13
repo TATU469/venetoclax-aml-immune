@@ -43,25 +43,22 @@ np.random.seed(42)
 # We auto-detect sample folders from extracted files.
 
 def detect_samples(raw_dir):
-    """Find all MTX directories or file triplets in raw_dir."""
-    mtx_files = glob.glob(os.path.join(raw_dir, "*matrix.mtx.gz"))
-    if not mtx_files:
-        mtx_files = glob.glob(os.path.join(raw_dir, "**", "*matrix.mtx.gz"), recursive=True)
+    """Find all MTX files in raw_dir (flat layout: GSMxxx_AML-Axx-pre_matrix.mtx.gz)."""
+    mtx_files = glob.glob(os.path.join(raw_dir, "*_matrix.mtx.gz"))
     samples = {}
     for mf in sorted(mtx_files):
-        d = os.path.dirname(mf)
-        base = os.path.basename(mf).replace("_matrix.mtx.gz", "").replace("matrix.mtx.gz", "")
-        # Try to extract patient + timepoint from filename
-        # Expected pattern: GSMxxxxxx_AML-Axx_{pre|post}_matrix.mtx.gz
-        parts = os.path.basename(mf).split("_")
-        patient  = next((p for p in parts if p.startswith("AML")), "unknown")
+        fname = os.path.basename(mf)
+        # Pattern: GSMxxxxxx_AML-Axx-{pre|post}_matrix.mtx.gz
+        prefix = fname.replace("_matrix.mtx.gz", "")  # e.g. GSM9197630_AML-A15-pre
+        parts  = prefix.split("_")
+        # patient = part containing AML-Axx, timepoint = pre/post
+        patient   = next((p for p in parts if p.startswith("AML-A")), "unknown")
         timepoint = "post" if any("post" in p.lower() for p in parts) else "pre"
         sample_id = f"{patient}_{timepoint}"
-        barcodes = mf.replace("matrix.mtx.gz", "barcodes.tsv.gz")
-        features = mf.replace("matrix.mtx.gz", "features.tsv.gz")
-        if not os.path.exists(barcodes):
-            barcodes = mf.replace("matrix.mtx.gz", "genes.tsv.gz")
+        barcodes = os.path.join(raw_dir, f"{prefix}_barcodes.tsv.gz")
+        features = os.path.join(raw_dir, f"{prefix}_features.tsv.gz")
         samples[sample_id] = {
+            "prefix": prefix, "dir": raw_dir,
             "matrix": mf, "barcodes": barcodes, "features": features,
             "patient": patient, "timepoint": timepoint,
         }
@@ -83,10 +80,10 @@ adatas, qc_records = [], []
 for sid, info in samples.items():
     log.info("--- Loading %s ---", sid)
     adata = sc.read_10x_mtx(
-        os.path.dirname(info["matrix"]),
+        info["dir"],
         var_names="gene_symbols",
         make_unique=True,
-        prefix=os.path.basename(info["matrix"]).replace("matrix.mtx.gz", ""),
+        prefix=info["prefix"] + "_",
     )
     adata.obs["sample_id"]  = sid
     adata.obs["patient_id"] = info["patient"]

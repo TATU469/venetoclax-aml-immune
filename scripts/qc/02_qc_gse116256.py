@@ -11,7 +11,7 @@ Outputs:
   results/figures/gse116256_qc_metrics.png
 """
 
-import sys, os, logging, warnings, glob, gzip, io
+import sys, os, logging, warnings, glob, gzip, io, re
 import numpy as np
 import pandas as pd
 import scanpy as sc
@@ -42,20 +42,17 @@ MAD_THRESH = 3
 MT_CAP     = 0.20
 
 # ── Detect sample files ────────────────────────────────────────────────────────
-# van Galen files: GSM*_AML*_dem.txt.gz (demultiplexed count matrices)
-# Format: genes as rows, cells as columns; first row = cell barcodes
-txt_files = sorted(glob.glob(os.path.join(RAW_DIR, "*.txt.gz")))
-# Filter: only AML diagnosis and healthy BM (skip treatment timepoints for reference)
-# AML diagnosis: AML*_d0_ or similar; HBM: BM*
-aml_files = [f for f in txt_files if "_AML" in os.path.basename(f) and "_d0" in os.path.basename(f).lower()]
-hbm_files = [f for f in txt_files if "_BM" in os.path.basename(f) or "healthy" in os.path.basename(f).lower()]
-# Fallback: use all non-cell-line files if pattern doesn't match
-if not aml_files:
-    aml_files = [f for f in txt_files if "MUTZ" not in f and "OCI" not in f and "cell_line" not in f.lower()]
-use_files = aml_files + hbm_files
-if not use_files:
-    use_files = txt_files
-log.info("Using %d sample files", len(use_files))
+# van Galen files: GSMxxxxxx_AMLxxx-D0.dem.txt.gz  (count matrices)
+#                  GSMxxxxxx_AMLxxx-D0.anno.txt.gz (cell type annotations)
+# Healthy BM:      GSMxxxxxx_BM1.dem.txt.gz
+# Exclude cell lines (MUTZ3, OCI-AML3) and treatment timepoints (D14, D29, etc.)
+# Keep: *-D0.dem.txt.gz (AML diagnosis) + BM*.dem.txt.gz (healthy BM)
+dem_files = sorted(glob.glob(os.path.join(RAW_DIR, "*.dem.txt.gz")))
+aml_d0 = [f for f in dem_files if "-D0.dem.txt.gz" in os.path.basename(f)]
+hbm    = [f for f in dem_files if re.search(r"_BM\d", os.path.basename(f))]
+use_files = aml_d0 + hbm
+log.info("AML D0: %d files | Healthy BM: %d files | Total: %d",
+         len(aml_d0), len(hbm), len(use_files))
 
 def load_txt_gz(path):
     """Load genes×cells TXT matrix from van Galen format."""
@@ -77,11 +74,10 @@ adatas, qc_records = [], []
 
 for fp in use_files:
     fname = os.path.basename(fp)
-    # Extract sample ID from filename
-    parts = fname.replace(".txt.gz", "").split("_")
-    # GSMxxxxxx_PATIENT_DEM_... → use patient + suffix
-    sample_id = "_".join(parts[1:3]) if len(parts) >= 3 else parts[0]
-    condition = "HBM" if ("BM" in fname.upper() and "AML" not in fname) else "AML_Dx"
+    # Pattern: GSMxxxxxx_AMLxxx-D0.dem.txt.gz  or  GSMxxxxxx_BM1.dem.txt.gz
+    sample_id = fname.split("_", 1)[1].replace(".dem.txt.gz", "")  # e.g. AML1012-D0
+    condition = "HBM" if sample_id.startswith("BM") else "AML_Dx"
+    anno_path = fp.replace(".dem.txt.gz", ".anno.txt.gz")
 
     log.info("--- Loading %s (%s) ---", sample_id, condition)
     try:
@@ -94,6 +90,26 @@ for fp in use_files:
     adata.obs["patient_id"]  = sample_id
     adata.obs["condition"]   = condition
     adata.obs_names = [f"{sample_id}_{bc}" for bc in adata.obs_names]
+
+    # Load van Galen cell type annotations if available
+    if os.path.exists(anno_path):
+        try:
+            anno = pd.read_csv(anno_path, sep="\t", index_col=0, compression="gzip")
+            # anno index = cell barcodes, columns include CellType
+            cell_type_col = next((c for c in anno.columns if "cell" in c.lower()
+                                   or "type" in c.lower() or "anno" in c.lower()), anno.columns[0])
+            anno_map = anno[cell_type_col].to_dict()
+            adata.obs["vangalen_celltype"] = [
+                anno_map.get(bc.split("_")[-1], anno_map.get(bc, "Unknown"))
+                for bc in adata.obs_names
+            ]
+            log.info("  %s: van Galen annotations loaded (%d unique types)",
+                     sample_id, adata.obs["vangalen_celltype"].nunique())
+        except Exception as e:
+            log.warning("  Could not load annotations for %s: %s", sample_id, e)
+            adata.obs["vangalen_celltype"] = "Unknown"
+    else:
+        adata.obs["vangalen_celltype"] = "Unknown"
 
     n_raw = adata.n_obs
     log.info("  %s: %d cells, %d genes (raw)", sample_id, adata.n_obs, adata.n_vars)
