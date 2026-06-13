@@ -57,14 +57,16 @@ echo "[INFO] Raw files:" | tee -a "${LOG}"
 ls -lh "${RAW}/"*.rds 2>/dev/null | tee -a "${LOG}" || echo "  No .rds files yet"
 
 # ── Step 2: R conversion ──────────────────────────────────────────────────────
-echo "[2/3] R conversion: Seurat RDS → MTX..." | tee -a "${LOG}"
-module load r/4.4.0
-
-# Use default R user library (do NOT export R_LIBS_USER — it would shadow system libs)
-Rscript -e ".libPaths()" 2>&1 | head -5 | tee -a "${LOG}"  # diagnostic
-
-Rscript "${PROJECT}/scripts/validation/12_convert_gse269669.R" \
-    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+N_CONVERTED=$(ls -d "${RAW}/converted"/PT* 2>/dev/null | wc -l)
+if [ "${N_CONVERTED}" -ge 10 ]; then
+    echo "[2/3] R conversion: ${N_CONVERTED} dirs already exist — skipping" | tee -a "${LOG}"
+else
+    echo "[2/3] R conversion: Seurat RDS → MTX..." | tee -a "${LOG}"
+    module load r/4.4.0
+    Rscript -e ".libPaths()" 2>&1 | head -5 | tee -a "${LOG}"
+    Rscript "${PROJECT}/scripts/validation/12_convert_gse269669.R" \
+        "${PROJECT}" 2>&1 | tee -a "${LOG}"
+fi
 
 echo "[INFO] Converted directories:" | tee -a "${LOG}"
 ls -lh "${RAW}/converted/" 2>/dev/null | tee -a "${LOG}" || echo "  None found"

@@ -54,26 +54,51 @@ MARKERS = {
 TIMEPOINT_SUFFIX = {"a": "pre", "b": "post", "c": "post_c2"}
 
 def parse_patient(sample_dir):
-    """Extract patient ID — strips trailing letter suffix (A/B/C)."""
+    """Extract patient ID from PTxxA/B/C or PT33_pre/PT33_post naming."""
     name = os.path.basename(sample_dir.rstrip("/"))
     # PTxxA / PTxxB / PTxxC → PT33
     m = re.match(r"^(PT\d+)[A-Ca-c]$", name)
     if m:
         return m.group(1)
+    # PT33_pre / PT33_post / PT33_post_c2 → PT33
+    m = re.match(r"^(PT\d+)_", name, re.IGNORECASE)
+    if m:
+        return m.group(1).upper()
     return name
 
 def parse_timepoint(sample_dir):
-    """Map letter suffix to timepoint: A=pre, B=post, C=post_c2."""
-    name = os.path.basename(sample_dir.rstrip("/"))
-    m = re.match(r"^PT\d+([A-Ca-c])$", name)
+    """Map directory name to timepoint label."""
+    name = os.path.basename(sample_dir.rstrip("/")).lower()
+    # PTxxA/B/C suffix
+    m = re.match(r"^pt\d+([a-c])$", name)
     if m:
-        return TIMEPOINT_SUFFIX.get(m.group(1).lower(), "pre")
+        return TIMEPOINT_SUFFIX.get(m.group(1), "pre")
+    # PT33_pre / PT33_post / PT33_post_c2 / PT33_on / PT33_baseline etc.
+    if re.search(r"_post_c2|_cycle2|_c2", name):
+        return "post_c2"
+    if re.search(r"_post|_after|_treat|_on", name):
+        return "post"
     return "pre"
 
 def is_tme_sample(sample_dir):
-    """Keep only TME-file directories (PTxxA/B/C), skip AML-file duplicates (PTxx_Pre/Post)."""
+    """Keep TME directories; exclude AML-file duplicates.
+
+    Accepts both naming conventions produced by 12_convert_gse269669.R:
+      - PTxxA / PTxxB / PTxxC  (when R splits by orig.ident)
+      - PT33_pre / PT33_post   (when R splits by patient+timepoint columns)
+    Excludes *_aml_* or *_AML_* directories from the AML Seurat object.
+    """
     name = os.path.basename(sample_dir.rstrip("/"))
-    return bool(re.match(r"^PT\d+[A-Ca-c]$", name))
+    # Exclude anything with 'aml' in the name (case-insensitive)
+    if re.search(r"aml", name, re.IGNORECASE):
+        return False
+    # Accept PTxxA/B/C
+    if re.match(r"^PT\d+[A-Ca-c]$", name):
+        return True
+    # Accept PT33_pre / PT33_post / PT33_post_c2 / PT33_on etc.
+    if re.match(r"^PT\d+_", name, re.IGNORECASE):
+        return True
+    return False
 
 def load_metadata_from_tsv(sample_dir):
     """Load per-cell metadata saved by R script, if available."""
@@ -188,8 +213,14 @@ if not adatas:
     log.error("No samples loaded.")
     sys.exit(1)
 
-adata_all = adatas[0].concatenate(adatas[1:], join="outer", fill_value=0) \
-    if len(adatas) > 1 else adatas[0]
+if len(adatas) > 1:
+    try:
+        import anndata as ad
+        adata_all = ad.concat(adatas, join="outer", fill_value=0)
+    except Exception:
+        adata_all = adatas[0].concatenate(adatas[1:], join="outer", fill_value=0)
+else:
+    adata_all = adatas[0]
 log.info("Concatenated: %d cells × %d genes", adata_all.n_obs, adata_all.n_vars)
 
 pd.DataFrame(qc_records).to_csv(
