@@ -13,6 +13,12 @@
 # Usage:
 #   Rscript 12_convert_gse269669.R <project_dir>
 
+# Add a writable user library without shadowing system libs
+user_lib <- path.expand("~/R/library")
+dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
+.libPaths(c(user_lib, .libPaths()))
+message("Library paths: ", paste(.libPaths(), collapse = ", "))
+
 suppressPackageStartupMessages({
   library(Matrix)
   library(methods)
@@ -20,9 +26,9 @@ suppressPackageStartupMessages({
 
 # ── Install Seurat if needed ──────────────────────────────────────────────────
 if (!requireNamespace("Seurat", quietly = TRUE)) {
-  message("Installing Seurat...")
+  message("Installing Seurat (this may take ~10 min)...")
   install.packages("Seurat", repos = "https://cloud.r-project.org",
-                   lib = Sys.getenv("R_LIBS_USER"), quiet = TRUE)
+                   lib = user_lib, quiet = TRUE)
 }
 suppressPackageStartupMessages(library(Seurat))
 message("Seurat version: ", packageVersion("Seurat"))
@@ -97,10 +103,12 @@ export_sample <- function(seu, sample_id, out_base) {
 }
 
 # ── Find RDS files ────────────────────────────────────────────────────────────
-rds_files <- list.files(RAW_DIR, pattern = "\\.rds$|\\.RDS$",
-                        full.names = TRUE, recursive = FALSE)
+# Prefer the TME file (immune cells); also load AML file if present
+preferred <- c("GSE269669_avm_tme.rds", "GSE269669_avm_aml.rds")
+rds_files <- file.path(RAW_DIR, preferred)
+rds_files <- rds_files[file.exists(rds_files)]
+
 if (length(rds_files) == 0) {
-  # Check one level down
   rds_files <- list.files(RAW_DIR, pattern = "\\.rds$|\\.RDS$",
                           full.names = TRUE, recursive = TRUE)
 }

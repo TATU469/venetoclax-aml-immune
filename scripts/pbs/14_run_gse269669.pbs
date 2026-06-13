@@ -30,35 +30,38 @@ echo "Start: $(date)" | tee "${LOG}"
 echo "[1/3] Downloading GSE269669..." | tee -a "${LOG}"
 BASE="https://ftp.ncbi.nlm.nih.gov/geo/series/GSE269nnn/GSE269669/suppl"
 RAW="${PROJECT}/data/raw/GSE269669"
-TAR="${RAW}/GSE269669_RAW.tar"
 
-if [ ! -s "${TAR}" ]; then
-    wget -q --show-progress -O "${TAR}" "${BASE}/GSE269669_RAW.tar" \
-        2>&1 | tee -a "${LOG}" || { echo "[WARN] RAW tar not found"; rm -f "${TAR}"; }
-fi
+# Two merged Seurat objects: TME (immune cells) + AML cells
+for FNAME in "GSE269669_avm_tme.rds.gz" "GSE269669_avm_aml.rds.gz"; do
+    DEST="${RAW}/${FNAME}"
+    if [ ! -s "${DEST}" ]; then
+        echo "[INFO] Downloading ${FNAME}..." | tee -a "${LOG}"
+        wget -q --show-progress -O "${DEST}" "${BASE}/${FNAME}" \
+            2>&1 | tee -a "${LOG}" || { echo "[WARN] ${FNAME} download failed"; rm -f "${DEST}"; }
+    else
+        echo "[INFO] ${FNAME} already present ($(du -h "${DEST}" | cut -f1))" | tee -a "${LOG}"
+    fi
+done
 
-if [ -s "${TAR}" ]; then
-    echo "[INFO] Extracting..." | tee -a "${LOG}"
-    tar -xf "${TAR}" -C "${RAW}/" 2>&1 | tee -a "${LOG}"
-fi
-
-# List GEO supplement directory to diagnose if tar failed
-if [ ! -d "${RAW}/converted" ]; then
-    echo "[INFO] GEO file listing:" | tee -a "${LOG}"
-    wget -q -O - "${BASE}/" 2>/dev/null \
-        | grep -oP 'GSE269669[^"]+' | sort | head -30 | tee -a "${LOG}" || true
-fi
+# Decompress .rds.gz → .rds
+for GZ in "${RAW}"/*.rds.gz; do
+    [ -f "${GZ}" ] || continue
+    RDS="${GZ%.gz}"
+    if [ ! -f "${RDS}" ]; then
+        echo "[INFO] Decompressing $(basename ${GZ})..." | tee -a "${LOG}"
+        gunzip -k "${GZ}"
+    fi
+done
 
 echo "[INFO] Raw files:" | tee -a "${LOG}"
-ls -lh "${RAW}/" | tee -a "${LOG}"
+ls -lh "${RAW}/"*.rds 2>/dev/null | tee -a "${LOG}" || echo "  No .rds files yet"
 
 # ── Step 2: R conversion ──────────────────────────────────────────────────────
 echo "[2/3] R conversion: Seurat RDS → MTX..." | tee -a "${LOG}"
 module load r/4.4.0
 
-# Set user R library
-export R_LIBS_USER="${HOME}/R/library/4.4"
-mkdir -p "${R_LIBS_USER}"
+# Use default R user library (do NOT export R_LIBS_USER — it would shadow system libs)
+Rscript -e ".libPaths()" 2>&1 | head -5 | tee -a "${LOG}"  # diagnostic
 
 Rscript "${PROJECT}/scripts/validation/12_convert_gse269669.R" \
     "${PROJECT}" 2>&1 | tee -a "${LOG}"
