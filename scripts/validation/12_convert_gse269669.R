@@ -13,24 +13,30 @@
 # Usage:
 #   Rscript 12_convert_gse269669.R <project_dir>
 
-# Add a writable user library without shadowing system libs
+# Writable user library — prepend so installs go here, system libs still visible
 user_lib <- path.expand("~/R/library")
 dir.create(user_lib, recursive = TRUE, showWarnings = FALSE)
 .libPaths(c(user_lib, .libPaths()))
-message("Library paths: ", paste(.libPaths(), collapse = ", "))
+message("Library paths: ", paste(.libPaths(), collapse = "; "))
+
+CRAN <- "https://cloud.r-project.org"
+
+install_if_missing <- function(pkg) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    message("Installing ", pkg, "...")
+    install.packages(pkg, repos = CRAN, lib = user_lib, quiet = TRUE)
+  }
+}
+
+# Matrix ships with R but may be absent in Spack builds — install from CRAN
+install_if_missing("Matrix")
+install_if_missing("Seurat")
 
 suppressPackageStartupMessages({
   library(Matrix)
   library(methods)
+  library(Seurat)
 })
-
-# ── Install Seurat if needed ──────────────────────────────────────────────────
-if (!requireNamespace("Seurat", quietly = TRUE)) {
-  message("Installing Seurat (this may take ~10 min)...")
-  install.packages("Seurat", repos = "https://cloud.r-project.org",
-                   lib = user_lib, quiet = TRUE)
-}
-suppressPackageStartupMessages(library(Seurat))
 message("Seurat version: ", packageVersion("Seurat"))
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
