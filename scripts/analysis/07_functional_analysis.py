@@ -302,9 +302,11 @@ ref.obs["dataset"]   = "GSE116256_vanGalen"
 
 # Use van Galen annotations where available
 if "vangalen_celltype" in ref.obs.columns:
-    ref.obs["label"] = ref.obs["vangalen_celltype"].fillna(ref.obs["cell_type"])
+    ref.obs["label"] = (ref.obs["vangalen_celltype"].astype(str)
+                        .replace("nan", np.nan)
+                        .fillna(ref.obs["cell_type"].astype(str)))
 else:
-    ref.obs["label"] = ref.obs["cell_type"]
+    ref.obs["label"] = ref.obs["cell_type"].astype(str)
 
 # Restore raw counts for both
 def get_raw_adata(ad):
