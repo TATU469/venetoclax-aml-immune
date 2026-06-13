@@ -360,7 +360,9 @@ sc.tl.umap(combined_hvg, random_state=42)
 
 # Transfer UMAP coords back to combined
 combined.obsm["X_umap"] = combined_hvg.obsm["X_umap"]
-combined.obs["dataset"] = combined_hvg.obs["dataset"]
+combined.obs["dataset"]    = combined_hvg.obs["dataset"].astype(str)
+combined.obs["cell_type"]  = combined.obs["cell_type"].astype(str)
+combined.obs["timepoint"]  = combined.obs["timepoint"].astype(str).replace("nan", "reference")
 
 # ── Integration UMAPs ──────────────────────────────────────────────────────────
 fig, axes = plt.subplots(2, 3, figsize=(18, 10))
@@ -372,7 +374,7 @@ sc.pl.umap(combined, color="dataset",    ax=axes[0, 0], show=False,
 sc.pl.umap(combined, color="cell_type",  ax=axes[0, 1], show=False, title="Cell type")
 
 # Timepoint — only venetoclax cells are coloured
-timepoint_col = combined.obs["timepoint"].fillna("reference").astype(str)
+timepoint_col = combined.obs["timepoint"].astype(str).replace("nan", "reference")
 combined.obs["timepoint_display"] = timepoint_col
 sc.pl.umap(combined, color="timepoint_display", ax=axes[0, 2], show=False,
            title="Timepoint (venetoclax only)")
