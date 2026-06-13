@@ -1,0 +1,41 @@
+#!/bin/bash
+#PBS -N venet_functional
+#PBS -l select=1:ncpus=8:mem=64gb
+#PBS -l walltime=03:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/functional.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/functional_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/results/figures/functional" \
+         "${PROJECT}/results/tables/functional"
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+echo "Start: $(date)" | tee "${LOG}"
+echo "Python: $(python3 --version)" | tee -a "${LOG}"
+
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/analysis/07_functional_analysis.py" \
+    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+
+EXIT_CODE=${PIPESTATUS[0]}
+echo "End: $(date)" | tee -a "${LOG}"
+
+if [ "${EXIT_CODE}" -ne 0 ]; then
+    echo "[ERROR] Exit code ${EXIT_CODE}" | tee -a "${LOG}"
+    exit "${EXIT_CODE}"
+fi
+
+echo "[INFO] Output files:" | tee -a "${LOG}"
+for d in "${PROJECT}/results/figures/functional" \
+         "${PROJECT}/results/tables/functional"; do
+    ls -lh "${d}"/ 2>/dev/null | tee -a "${LOG}" || true
+done
