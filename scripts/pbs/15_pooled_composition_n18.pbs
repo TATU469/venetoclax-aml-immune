@@ -1,0 +1,42 @@
+#!/bin/bash
+#PBS -N venet_pooled_n18
+#PBS -l select=1:ncpus=4:mem=96gb
+#PBS -l walltime=02:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/pooled_n18.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+# Pooled composition analysis: GSE306339 (n=3) + GSE311458 (n=4) + GSE269669 (n=11) = n=18
+# Requires all three h5ad files to be present in data/processed/
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/pooled_n18_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/results/figures/validation" \
+         "${PROJECT}/results/tables/validation" \
+         "${PROJECT}/logs"
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+echo "Start: $(date)" | tee "${LOG}"
+
+echo "[INFO] Checking required h5ad files..." | tee -a "${LOG}"
+for F in gse306339_annotated.h5ad gse311458_annotated.h5ad gse269669_annotated.h5ad; do
+    if [ ! -f "${PROJECT}/data/processed/${F}" ]; then
+        echo "[ERROR] Missing: ${F}" | tee -a "${LOG}"
+        exit 1
+    fi
+    echo "  OK: ${F} ($(du -h "${PROJECT}/data/processed/${F}" | cut -f1))" | tee -a "${LOG}"
+done
+
+echo "[1/1] Pooled composition (n=18)..." | tee -a "${LOG}"
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/11_pooled_composition.py" \
+    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+
+echo "End: $(date)" | tee -a "${LOG}"

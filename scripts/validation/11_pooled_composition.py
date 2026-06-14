@@ -1,9 +1,9 @@
 """
-Pooled composition analysis — GSE306339 (n=3) + GSE311458 (n=4) = n=7 patients.
+Pooled composition analysis — GSE306339 (n=3) + GSE311458 (n=4) + GSE269669 (n=11) = n=18.
 
-Paired Wilcoxon pre/post venetoclax across both cohorts combined.
-Also tests response stratification (responders vs non-responders) using
-GSE311458 outcome labels.
+Paired Wilcoxon pre/post venetoclax across all three cohorts combined.
+GSE269669 is the primary expansion cohort: 11 TP53-mut patients, ven+AZA+magrolimab.
+Also tests response stratification (responders vs non-responders) using GSE311458 labels.
 
 Outputs:
   results/tables/validation/pooled_composition_results.tsv
@@ -40,7 +40,7 @@ N_BOOT   = 1000
 BH_ALPHA = 0.05
 COLORS   = {"pre": "#e74c3c", "post": "#2980b9"}
 
-# ── Load both datasets ────────────────────────────────────────────────────────
+# ── Load all three datasets ───────────────────────────────────────────────────
 log.info("Loading GSE306339...")
 a1 = sc.read_h5ad(os.path.join(PROC_DIR, "gse306339_annotated.h5ad"))
 a1.obs["cohort"] = "GSE306339"
@@ -55,9 +55,21 @@ if not os.path.exists(h5_path):
 a2 = sc.read_h5ad(h5_path)
 a2.obs["cohort"] = "GSE311458"
 
-# Harmonise obs columns
+log.info("Loading GSE269669...")
+h5_path3 = os.path.join(PROC_DIR, "gse269669_annotated.h5ad")
+if not os.path.exists(h5_path3):
+    log.error("GSE269669 h5ad not found — run 13_qc_gse269669.py first")
+    sys.exit(1)
+a3 = sc.read_h5ad(h5_path3)
+a3.obs["cohort"] = "GSE269669"
+if "outcome" not in a3.obs.columns:
+    a3.obs["outcome"] = "TP53_venetoclax_magrolimab"
+# Use only pre/post for paired analysis (ignore post_c2)
+a3 = a3[a3.obs["timepoint"].isin(["pre", "post"])].copy()
+
+# Harmonise obs columns across all cohorts
 for col in ["sample_id", "patient_id", "timepoint", "cell_type", "cohort", "outcome"]:
-    for ad in [a1, a2]:
+    for ad in [a1, a2, a3]:
         if col not in ad.obs.columns:
             ad.obs[col] = "unknown"
 
@@ -65,16 +77,19 @@ for col in ["sample_id", "patient_id", "timepoint", "cell_type", "cohort", "outc
 obs_all = pd.concat([a1.obs[["sample_id", "patient_id", "timepoint",
                                "cell_type", "cohort", "outcome"]],
                       a2.obs[["sample_id", "patient_id", "timepoint",
+                               "cell_type", "cohort", "outcome"]],
+                      a3.obs[["sample_id", "patient_id", "timepoint",
                                "cell_type", "cohort", "outcome"]]])
 
 # Make patient IDs unique across cohorts
 obs_all["patient_uid"] = obs_all["cohort"] + "_" + obs_all["patient_id"].astype(str)
 
-log.info("Pooled: %d cells, %d patients (%d GSE306339 + %d GSE311458)",
+log.info("Pooled: %d cells, %d patients (%d GSE306339 + %d GSE311458 + %d GSE269669)",
          len(obs_all),
          obs_all["patient_uid"].nunique(),
          a1.obs["patient_id"].nunique(),
-         a2.obs["patient_id"].nunique())
+         a2.obs["patient_id"].nunique(),
+         a3.obs["patient_id"].nunique())
 
 # ── Cell-type fractions per patient per timepoint ─────────────────────────────
 counts = (obs_all.groupby(["patient_uid", "timepoint", "cell_type"])
@@ -131,7 +146,7 @@ log.info("\nAll results:\n%s",
 key_types = results_df.nsmallest(6, "wilcoxon_p")["cell_type"].tolist()
 fig, axes = plt.subplots(2, 3, figsize=(14, 8))
 axes = axes.flatten()
-cohort_markers = {"GSE306339": "o", "GSE311458": "s"}
+cohort_markers = {"GSE306339": "o", "GSE311458": "s", "GSE269669": "^"}
 
 for i, ct in enumerate(key_types):
     ax = axes[i]
@@ -139,7 +154,7 @@ for i, ct in enumerate(key_types):
     pivot   = ct_data.pivot_table(index="patient_uid", columns="timepoint",
                                    values="fraction").dropna(subset=["pre", "post"])
     for pid in pivot.index:
-        cohort = "GSE306339" if pid.startswith("GSE306339") else "GSE311458"
+        cohort = next((c for c in cohort_markers if pid.startswith(c)), "GSE306339")
         ax.plot([0, 1], [pivot.loc[pid, "pre"], pivot.loc[pid, "post"]],
                 "-", color="grey", alpha=0.5, lw=1.5)
         ax.scatter([0], [pivot.loc[pid, "pre"]],
@@ -157,11 +172,13 @@ for i, ct in enumerate(key_types):
     ax.set_ylabel("Fraction", fontsize=8)
     ax.set_xlim(-0.35, 1.35)
 
-legend_els = [mpatches.Patch(color="white", label="●  GSE306339 (TP53-mut)"),
-              mpatches.Patch(color="white", label="■  GSE311458 (mixed)")]
-fig.legend(handles=legend_els, loc="lower center", ncol=2, fontsize=8, frameon=False)
-plt.suptitle(f"Pooled composition: pre vs post venetoclax (n=7 patients)", fontsize=11)
-plt.tight_layout(rect=[0, 0.04, 1, 1])
+n_total = obs_all["patient_uid"].nunique()
+legend_els = [mpatches.Patch(color="white", label="●  GSE306339 (TP53-mut, ven+AZA)"),
+              mpatches.Patch(color="white", label="■  GSE311458 (mixed, ven+AZA+chidamide)"),
+              mpatches.Patch(color="white", label="▲  GSE269669 (TP53-mut, ven+AZA+magrolimab)")]
+fig.legend(handles=legend_els, loc="lower center", ncol=1, fontsize=8, frameon=False)
+plt.suptitle(f"Pooled composition: pre vs post venetoclax (n={n_total} patients)", fontsize=11)
+plt.tight_layout(rect=[0, 0.06, 1, 1])
 fig.savefig(os.path.join(FIG_DIR, "pooled_composition_spaghetti.png"),
             dpi=150, bbox_inches="tight")
 plt.close(fig)
@@ -179,8 +196,8 @@ ax.axvline(1.0, color="black", lw=0.8, ls="--")
 ax.set_yticks(range(len(forest)))
 ax.set_yticklabels(forest["cell_type"], fontsize=9)
 ax.set_xlabel("Median fold change (post / pre)", fontsize=10)
-ax.set_title(f"Pooled composition changes — venetoclax+AZA\n"
-             f"(n=7 patients; red = FDR<0.05)", fontsize=10)
+ax.set_title(f"Pooled composition changes — venetoclax-based therapy\n"
+             f"(n={n_total} patients; red = FDR<0.05)", fontsize=10)
 plt.tight_layout()
 fig.savefig(os.path.join(FIG_DIR, "pooled_composition_forest.png"),
             dpi=150, bbox_inches="tight")
