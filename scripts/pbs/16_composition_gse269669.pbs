@@ -1,0 +1,32 @@
+#!/bin/bash
+#PBS -N venet_comp_269669
+#PBS -l select=1:ncpus=4:mem=96gb
+#PBS -l walltime=01:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/z5530616/projects/venetoclax_aml_immune/logs/comp_gse269669.log
+#PBS -M alextatu2014@gmail.com
+#PBS -m abe
+
+# GSE269669-only composition analysis using Azimuth L2 cell type labels.
+# Requires: data/processed/gse269669_annotated.h5ad
+
+set -euo pipefail
+
+PROJECT=/srv/scratch/z5530616/projects/venetoclax_aml_immune
+CONDA_ENV=/srv/scratch/z5530616/projects/pediatric_aml_relapse_multiome/envs/sc_multiome
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG=${PROJECT}/logs/comp_gse269669_${TIMESTAMP}.log
+
+mkdir -p "${PROJECT}/results/figures/validation" \
+         "${PROJECT}/results/tables/validation" \
+         "${PROJECT}/logs"
+
+source /srv/scratch/z5530616/miniconda3/etc/profile.d/conda.sh
+conda activate "${CONDA_ENV}"
+
+echo "Start: $(date)" | tee "${LOG}"
+
+PYTHONNOUSERSITE=1 python3 "${PROJECT}/scripts/validation/16_composition_gse269669.py" \
+    "${PROJECT}" 2>&1 | tee -a "${LOG}"
+
+echo "End: $(date)" | tee -a "${LOG}"
